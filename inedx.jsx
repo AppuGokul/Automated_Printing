@@ -4,11 +4,14 @@ import { useDropzone } from 'react-dropzone';
 export default function App() {
   const [files, setFiles] = useState([]);
   const [copies, setCopies] = useState(1);
+  const [isColor, setIsColor] = useState(false); // New state for color option
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [lastJobId, setLastJobId] = useState(''); // New state to hold the Job ID
 
   const onDrop = useCallback(acceptedFiles => {
     setFiles([acceptedFiles[0]]);
+    setLastJobId(''); // Clear previous job ID when a new file is selected
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -25,6 +28,7 @@ export default function App() {
 
     setUploading(true);
     setUploadStatus('Status: Getting upload permission...');
+    setLastJobId('');
 
     const file = files[0];
     const apiEndpoint = 'https://wu5y9rz6db.execute-api.ap-south-1.amazonaws.com/default/lambda_print';
@@ -52,15 +56,18 @@ export default function App() {
       
       setUploadStatus('Status: Logging print job...');
       const fileUrl = `https://${new URL(uploadURL).hostname}/${key}`;
-      await fetch(apiEndpoint, {
+      const logResponse = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
               FileUrl: fileUrl,
               FileName: file.name,
-              Copies: copies
+              Copies: copies,
+              IsColor: isColor // Sending the color preference
           })
       });
+      const logData = await logResponse.json(); // Capture the response
+      setLastJobId(logData.jobId); // Save the returned Job ID
 
       setUploadStatus(`Success! "${file.name}" is now in the print queue.`);
       setFiles([]);
@@ -104,16 +111,17 @@ export default function App() {
           </div>
         )}
 
-        <div className="flex items-center justify-center space-x-4 pt-2">
-          <label htmlFor="copies" className="font-semibold text-lg">Copies:</label>
-          <input
-            type="number"
-            id="copies"
-            min="1"
-            value={copies}
-            onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value, 10)))}
-            className="bg-gray-700 border border-gray-600 rounded-lg p-2 w-24 text-center focus:ring-2 focus:ring-cyan-400 focus:outline-none"
-          />
+        <div className="flex items-center justify-around pt-2">
+            <div className="flex items-center space-x-4">
+                <label htmlFor="copies" className="font-semibold text-lg">Copies:</label>
+                <input type="number" id="copies" min="1" value={copies} onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value, 10)))}
+                className="bg-gray-700 border border-gray-600 rounded-lg p-2 w-24 text-center focus:ring-2 focus:ring-cyan-400 focus:outline-none"/>
+            </div>
+            <div className="flex items-center space-x-3">
+                <input type="checkbox" id="isColor" checked={isColor} onChange={(e) => setIsColor(e.target.checked)}
+                className="h-5 w-5 rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-cyan-600"/>
+                <label htmlFor="isColor" className="font-semibold text-lg">Print in Color</label>
+            </div>
         </div>
 
         <button
@@ -129,7 +137,15 @@ export default function App() {
           ) : 'Upload and Print'}
         </button>
 
-        {uploadStatus && (
+        {lastJobId && (
+            <div className="text-center bg-green-900/50 border border-green-500 rounded-lg p-3 mt-4 animate-fade-in">
+                <p className="text-sm text-gray-300">Your Job ID is:</p>
+                <p className="font-mono text-lg text-green-400 break-all">{lastJobId}</p>
+                <p className="text-xs text-gray-400 mt-2">Please save this ID to check your print status later.</p>
+            </div>
+        )}
+
+        {uploadStatus && !lastJobId && (
           <p className="text-center text-sm text-gray-400 h-5">{uploadStatus}</p>
         )}
       </div>
